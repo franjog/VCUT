@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="VCUT.vbproj" />
-  <Project Path="VCUT.Core/VCUT.Core.vbproj" />
-  <Project Path="VCUT.Tests/VCUT.Tests.vbproj" />
-</Solution>

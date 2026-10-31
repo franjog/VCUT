@@ -17,7 +17,7 @@ if (!$outputPath.StartsWith($allowedPrefix, [StringComparison]::OrdinalIgnoreCas
 
 Push-Location $projectRoot
 try {
-    & dotnet build 'VCUT.slnx' -c Release --disable-build-servers -m:1 -nr:false
+    & dotnet build 'VCutStudio.slnx' -c Release --disable-build-servers -m:1 -nr:false
     if ($LASTEXITCODE -ne 0) { throw 'La compilacion o las pruebas no han terminado correctamente.' }
 
     if (Test-Path -LiteralPath $outputPath) {
@@ -25,12 +25,12 @@ try {
     }
     [IO.Directory]::CreateDirectory($outputPath) | Out-Null
 
-    & dotnet publish 'VCUT.vbproj' -c Release -p:PublishProfile=Portable-win-x64 -p:RunTestsOnBuild=false -p:DebugType=None -p:DebugSymbols=false -o $outputPath --disable-build-servers -m:1 -nr:false
+    & dotnet publish 'VCutStudio.csproj' -c Release -p:PublishProfile=Portable-win-x64 -p:RunTestsOnBuild=false -p:DebugType=None -p:DebugSymbols=false -o $outputPath --disable-build-servers -m:1 -nr:false
     if ($LASTEXITCODE -ne 0) { throw 'No se ha podido crear la publicacion portable.' }
 
     $files = @(Get-ChildItem -LiteralPath $outputPath -File)
-    if ($files.Count -ne 1 -or $files[0].Name -ne 'VCUT.exe') {
-        throw 'La publicacion no contiene unicamente VCUT.exe.'
+    if ($files.Count -ne 1 -or $files[0].Name -ne 'VCutStudio.exe') {
+        throw 'La publicacion no contiene unicamente VCutStudio.exe.'
     }
 
     $hash = Get-FileHash -LiteralPath $files[0].FullName -Algorithm SHA256

@@ -10,6 +10,7 @@ tools/ffmpeg/
 *.user
 vcut.log
 vcut.previous.log
+/test.mp4
 
 # Ignorar todos los ficheros .md excepto el README principal y el manual
 *.md

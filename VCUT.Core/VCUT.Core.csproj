@@ -2,5 +2,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>VCUT.Core</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <Version>1.5.0</Version>
+    <Optimize>true</Optimize>
   </PropertyGroup>
 </Project>
+

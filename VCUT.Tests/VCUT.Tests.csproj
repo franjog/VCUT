@@ -2,8 +2,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>VCUT.Tests</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <Version>1.5.0</Version>
+    <Optimize>true</Optimize>
     <RunTestsOnBuild Condition="'$(RunTestsOnBuild)' == ''">true</RunTestsOnBuild>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
@@ -11,7 +15,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.5.2" />
     <PackageReference Include="MSTest.TestFramework" Version="4.5.2" />
-    <ProjectReference Include="..\VCUT.Core\VCUT.Core.vbproj" />
+    <ProjectReference Include="..\VCUT.Core\VCUT.Core.csproj" />
     <Content Include="..\tools\ffmpeg\ffmpeg.exe;..\tools\ffmpeg\ffprobe.exe" Link="tools\ffmpeg\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- VSTest runs the already built assembly; it never invokes another build. -->
@@ -19,3 +23,4 @@
     <Exec Command="dotnet vstest &quot;$(TargetPath)&quot; --logger:&quot;console;verbosity=minimal&quot;" StdOutEncoding="utf-8" StdErrEncoding="utf-8" IgnoreStandardErrorWarningFormat="true" />
   </Target>
 </Project>
+

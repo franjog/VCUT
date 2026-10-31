@@ -7,13 +7,13 @@
 <p align="center"><strong>Recorta rápido. Conserva la calidad.</strong></p>
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/version-1.4.0-2DD4BF">
-  <img alt="Visual Basic" src="https://img.shields.io/badge/Visual%20Basic-.NET%2010-512BD4">
+  <img alt="Versión" src="https://img.shields.io/badge/version-1.5.0-2DD4BF">
+  <img alt="C#" src="https://img.shields.io/badge/C%23-.NET%2010-512BD4">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-x64-0078D4">
-  <img alt="Pruebas" src="https://img.shields.io/badge/tests-48%20passing-2DD4BF">
+  <img alt="Pruebas" src="https://img.shields.io/badge/tests-55%20passing-2DD4BF">
 </p>
 
-Aplicación de escritorio en **Visual Basic, Windows Forms y .NET 10** para recortar vídeos mediante copia directa de sus pistas, sin recodificarlas.
+Aplicación de escritorio **VCutStudio** en **C#, Windows Forms y .NET 10** para recortar vídeos mediante copia directa de sus pistas, sin recodificarlas.
 
 ![Interfaz principal](docs/images/interfaz-principal.png)
 
@@ -21,16 +21,16 @@ Consulta el **[manual completo](docs/MANUAL.md)** para conocer características,
 
 ## Abrir y usar
 
-Abre `VCUT.slnx` con **Visual Studio 2026**, selecciona **VCUT** como proyecto de inicio y pulsa F5. También puedes ejecutar `bin/Debug/net10.0-windows/VCUT.exe` después de compilar. La salida de desarrollo necesita su carpeta completa; para distribuir un único archivo utiliza la publicación portable descrita más abajo.
+Abre `VCutStudio.slnx` con **Visual Studio 2026**, selecciona **VCutStudio** como proyecto de inicio y pulsa F5. También puedes ejecutar `bin/Debug/net10.0-windows/VCutStudio.exe` después de compilar. La salida de desarrollo necesita su carpeta completa; para distribuir un único archivo utiliza la publicación portable descrita más abajo.
 
 1. Pulsa **Abrir vídeo** o arrastra un archivo a la ventana.
-2. Reproduce, salta cinco segundos o desplázate por la línea de tiempo. Usa **Usar posición [I]** y **Usar posición [O]**, o escribe las marcas como `hh:mm:ss.fff`.
-3. **Previsualizar selección** permite comprobar el intervalo elegido.
+2. Reproduce, salta cinco segundos o desplázate por la línea de tiempo (pasa el ratón para ver una miniatura cada 0,5 s, o haz clic y arrastra sin soltar para actualizar al instante el **Monitor de estudio** a máxima calidad). Usa **[ I ] Fijar inicio** y **Fijar fin [ O ]**, o escribe las marcas como `hh:mm:ss.fff`.
+3. **Previsualizar intervalo seleccionado** permite comprobar el fragmento elegido.
 4. Si el contenedor original no acepta alguna pista, activa **Guardar como MKV**. La operación sigue usando copia directa, sin recodificar.
-5. Pulsa **Exportar recorte**. El resultado se guarda junto al original: `vacaciones.mp4` → `vacaciones_cut.mp4` o `vacaciones_cut.mkv`.
+5. Pulsa **EXPORTAR RECORTE SIN PÉRDIDA**. El resultado se guarda junto al original: `vacaciones.mp4` → `vacaciones_cut.mp4` o `vacaciones_cut.mkv`.
 6. **Mostrar archivo** selecciona el resultado en el Explorador de archivos.
 
-Atajos: **Ctrl+O** abrir, **Espacio** reproducir/pausar, **I** inicio y **O** fin. Dentro de un campo de tiempo las teclas se usan para editar. El diseño coloca los paneles lado a lado en ventanas amplias y los apila con desplazamiento vertical cuando falta espacio. Admite escalado DPI.
+Atajos: **Ctrl+O** abrir, **Espacio** reproducir/pausar, **I** inicio y **O** fin. Dentro de un campo de tiempo las teclas se usan para editar. La aplicación inicia maximizada, coloca los paneles lado a lado en ventanas amplias y los apila con desplazamiento vertical cuando falta espacio. Admite escalado DPI.
 
 Durante el recorte se muestran progreso, tiempo transcurrido y tiempo restante **estimado**. Los recortes cortos pueden terminar antes de disponer de una estimación. Puedes cancelar; al cerrar durante una operación se cancela y se espera a limpiar el archivo temporal.
 
@@ -42,7 +42,7 @@ La publicación `win-x64` incluye el runtime .NET 10, FFmpeg, FFprobe, LibVLC y 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\Publish-Portable.ps1
 ```
 
-El resultado se crea en `dist\VCUT-win-x64\VCUT.exe`. El primer arranque puede tardar unos segundos mientras se extraen los componentes nativos en la carpeta temporal de Windows.
+El resultado se crea en `dist\VCUT-win-x64\VCutStudio.exe`. El primer arranque puede tardar unos segundos mientras se extraen los componentes nativos en la carpeta temporal de Windows.
 
 ## Requisitos y dependencias
 
@@ -55,8 +55,8 @@ Las dependencias están preparadas en esta copia. En una copia nueva:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\Setup-FFmpeg.ps1
-dotnet restore VCUT.slnx
-dotnet build VCUT.slnx
+dotnet restore VCutStudio.slnx
+dotnet build VCutStudio.slnx
 ```
 
 El script conserva la versión, origen y SHA256 en `tools/ffmpeg/download-info.txt`, junto con la licencia. NuGet usa `.packages` dentro del repositorio. Consulta `THIRD-PARTY-NOTICES.md` para las licencias.
@@ -69,7 +69,7 @@ La copia directa depende de los **fotogramas clave**: el fragmento puede empezar
 
 El selector incluye MP4, MKV, MOV, AVI, WebM, TS, MXF, Ogg, FLV, ASF/WMV, DV, RM/RMVB, Y4M y muchos otros. La opción **Todos los archivos** permite intentar cualquier formato reconocido por FFprobe. Ningún motor garantiza literalmente todos los formatos. Para mantener la extensión original, su contenedor debe admitir todas las pistas. La opción **Guardar como MKV** remultiplexa el recorte a Matroska, un contenedor más flexible, manteniendo `-map 0` y `-c copy`; no descarta pistas ni recodifica vídeo o audio.
 
-VCUT detecta los adaptadores gráficos del equipo y solicita a LibVLC decodificación por hardware para la previsualización cuando hay una GPU disponible. El recorte y la salida MKV no necesitan GPU: la copia directa mueve paquetes comprimidos sin decodificarlos ni codificarlos.
+VCutStudio detecta los adaptadores gráficos del equipo (priorizando GPU dedicada) y precarga el vídeo en memoria RAM por defecto, solicitando a LibVLC decodificación por hardware para la previsualización cuando hay una GPU disponible. El recorte y la salida MKV no necesitan GPU: la copia directa mueve paquetes comprimidos sin decodificarlos ni codificarlos.
 
 Cada sesión y operación queda registrada en `vcut.log`, junto al ejecutable. Cada línea incluye fecha, hora y zona horaria; los fallos incluyen la excepción y su traza completa. Si esa carpeta no permite escritura, el registro se guarda en `%LOCALAPPDATA%\VCUT\vcut.log`. Al alcanzar 5 MB, el registro anterior pasa a `vcut.previous.log`.
 
@@ -77,30 +77,30 @@ El original no se modifica. Si ya existe `_cut`, se pide renombrarlo o moverlo; 
 
 ## Pruebas en cada compilación
 
-`VCUT.Tests` es un proyecto MSTest en Visual Basic independiente de la interfaz. Se compila como dependencia de construcción de VCUT (sin enlazar su ensamblado a la aplicación) y su destino `RunTestsAfterBuild` ejecuta VSTest sobre el ensamblado recién compilado. Un fallo devuelve un error de compilación. La comprobación rápida de Visual Studio está desactivada en ambos proyectos para que **Compilar** vuelva a ejecutar las pruebas aunque no haya cambios.
+`VCUT.Tests` es un proyecto MSTest en C# independiente de la interfaz. Se compila como dependencia de construcción de VCutStudio (sin enlazar su ensamblado a la aplicación) y su destino `RunTestsAfterBuild` ejecuta VSTest sobre el ensamblado recién compilado. Un fallo devuelve un error de compilación. La comprobación rápida de Visual Studio está desactivada en ambos proyectos para que **Compilar** vuelva a ejecutar las pruebas aunque no haya cambios.
 
-Las 48 pruebas cubren validación de marcas, nombres de salida original y MKV, detección de GPU, tiempos y culturas, metadatos, progreso, estimación, cancelación, limpieza de temporales, archivos existentes y recortes reales. Los vídeos sintéticos se crean en una carpeta temporal única y se eliminan después. Se comparan hashes SHA256 de paquetes de vídeo para verificar que sus bytes se conservan, además de decodificar el resultado y comprobar las pistas de audio.
+Las 55 pruebas cubren validación de marcas, nombres de salida original y MKV, detección de GPU, caché RAM, lector nativo ISO-BMFF, caché de fotogramas a resolución nativa cada 0,5 s, tiempos y culturas, metadatos, progreso, estimación, cancelación, limpieza de temporales, archivos existentes y recortes reales. Los vídeos sintéticos se crean en una carpeta temporal única y se eliminan después. Se comparan hashes SHA256 de paquetes de vídeo para verificar que sus bytes se conservan, además de decodificar el resultado y comprobar las pistas de audio.
 
 ```powershell
 # Compilar y probar (Debug o Release)
-dotnet build VCUT.slnx
-dotnet build VCUT.slnx -c Release
+dotnet build VCutStudio.slnx
+dotnet build VCutStudio.slnx -c Release
 
 # Repetir solo las pruebas ya compiladas
-dotnet test VCUT.Tests\VCUT.Tests.vbproj --no-build
+dotnet test VCUT.Tests\VCUT.Tests.csproj --no-build
 ```
 
 Para publicar después de verificar las pruebas:
 
 ```powershell
-dotnet publish VCUT.vbproj -c Release -p:RunTestsOnBuild=false -o artifacts\publish
+dotnet publish VCutStudio.csproj -c Release -p:RunTestsOnBuild=false -o artifacts\publish
 ```
 
 `RunTestsOnBuild=false` es una exclusión explícita para empaquetado; no es el valor predeterminado. No hay compilaciones recursivas: VSTest no recompila. En entornos con procesos MSBuild restringidos se puede usar `--disable-build-servers -m:1 -nr:false`.
 
 ## Estructura y mantenimiento
 
-- `Form1.Main.vb`: interfaz, estado de operaciones y reproducción VLC; `Form1.vb` y su diseñador conservan el formulario original.
+- `principal.Main.cs`: interfaz del formulario `principal`, estado de operaciones y reproducción VLC; `principal.cs` y `principal.Designer.cs` contienen la definición base del formulario.
 - `VCUT.Core`: análisis de archivos, validación de intervalos, argumentos FFmpeg, ejecución/cancelación de procesos y estimación de progreso.
 - `VCUT.Tests`: pruebas unitarias y de integración del motor.
 - `scripts/Setup-FFmpeg.ps1`: preparación reproducible de las herramientas portables y registro de descarga.

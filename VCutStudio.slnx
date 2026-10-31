@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="VCutStudio.csproj" />
+  <Project Path="VCUT.Core/VCUT.Core.csproj" />
+  <Project Path="VCUT.Tests/VCUT.Tests.csproj" />
+</Solution>
