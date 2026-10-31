@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <StartupObject>Sub Main</StartupObject>
+    <UseWindowsForms>true</UseWindowsForms>
+    <MyType>WindowsForms</MyType>
+    <RootNamespace>VCUT</RootNamespace>
+    <OptionStrict>On</OptionStrict>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\vcut.ico</ApplicationIcon>
+    <Version>1.4.0</Version>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
+    <Product>VCUT</Product>
+    <Description>Recorte de vídeo mediante copia directa, sin recodificación.</Description>
+    <RunTestsOnBuild Condition="'$(RunTestsOnBuild)' == ''">true</RunTestsOnBuild>
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="VCUT.Core\**;VCUT.Tests\**" />
+    <EmbeddedResource Remove="VCUT.Core\**;VCUT.Tests\**" />
+    <EmbeddedResource Include="Assets\vcut-mark.png" LogicalName="VCUT.Assets.vcut-mark.png" />
+    <None Remove="VCUT.Core\**;VCUT.Tests\**;.packages\**;tools\**;Assets\vcut-mark.png;Assets\vcut-source.png;Assets\vcut.ico" />
+    <None Include="Assets\vcut-source.png" />
+    <ProjectReference Include="VCUT.Core\VCUT.Core.vbproj" />
+    <ProjectReference Include="VCUT.Tests\VCUT.Tests.vbproj" ReferenceOutputAssembly="false" Private="false" Condition="'$(RunTestsOnBuild)' == 'true'" />
+    <PackageReference Include="LibVLCSharp.WinForms" Version="3.10.2" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+    <Content Include="tools\ffmpeg\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="CheckVideoTools" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)\tools\ffmpeg\ffmpeg.exe') Or !Exists('$(MSBuildProjectDirectory)\tools\ffmpeg\ffprobe.exe')" Text="Faltan FFmpeg y FFprobe. Ejecuta powershell -ExecutionPolicy Bypass -File scripts\Setup-FFmpeg.ps1" />
+  </Target>
+
+  <ItemGroup>
+    <Import Include="System.Data" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="My Project\Application.Designer.vb">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Application.myapp</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="My Project\Application.myapp">
+      <Generator>MyApplicationCodeGenerator</Generator>
+      <LastGenOutput>Application.Designer.vb</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+</Project>

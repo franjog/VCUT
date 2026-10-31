@@ -1,0 +1,18 @@
+**/bin/
+**/obj/
+.vs/
+.packages/
+TestResults/
+**/TestResults/
+artifacts/
+dist/
+tools/ffmpeg/
+*.user
+vcut.log
+vcut.previous.log
+
+# Ignorar todos los ficheros .md excepto el README principal y el manual
+*.md
+**/*.md
+!/README.md
+!/docs/MANUAL.md
