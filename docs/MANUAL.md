@@ -11,7 +11,7 @@
   <img alt="C#" src="https://img.shields.io/badge/C%23-.NET%2010-512BD4">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-x64-0078D4">
   <img alt="FFmpeg" src="https://img.shields.io/badge/FFmpeg-9.0.2-007808">
-  <img alt="Pruebas" src="https://img.shields.io/badge/tests-55%20passing-2DD4BF">
+  <img alt="Pruebas" src="https://img.shields.io/badge/tests-59%20passing-2DD4BF">
 </p>
 
 **VCutStudio** es una aplicación de escritorio para extraer un intervalo de un vídeo mediante **copia directa de las pistas**. El vídeo y el audio no se vuelven a codificar, por lo que el proceso es ultrarrápido y mantiene los datos originales al 100%.
@@ -23,8 +23,10 @@
 - 🎬 Carga manual o mediante arrastrar y soltar con precalentamiento instantáneo, lector nativo ISO-BMFF (`moov`) en < 1 ms y barra de progreso de análisis.
 - ⏱️ Marcas de inicio y fin con precisión de milisegundos.
 - ▶️ Reproductor integrado, previsualización del intervalo y controles interactivos destacados.
-- ↔️ Línea de tiempo interactiva con forma de onda estilizada, selección gráfica con gradiente, **vista previa flotante del fotograma a máxima calidad al pasar el ratón (2 fotogramas por segundo / cada 0,5 s)**, **carga inmediata y fluida en el Monitor de estudio al hacer clic o arrastrar sin soltar (caché multinúcleo en RAM con interpolación `HighQualityBicubic` y resolución nativa)** y saltos de cinco segundos.
-- ✂️ Recorte mediante `-c copy`, sin recodificar vídeo ni audio.
+- ↔️ Línea de tiempo interactiva de vídeo (`🎬 VÍDEO`) con selección gráfica con gradiente, **vista previa flotante del fotograma a máxima calidad al pasar el ratón (2 fotogramas por segundo / cada 0,5 s)**, **carga inmediata y fluida en el Monitor de estudio al hacer clic o arrastrar sin soltar (caché multinúcleo en RAM con interpolación `HighQualityBicubic` y resolución nativa)** y saltos de cinco segundos.
+- 🔊 **Línea de tiempo informativa de sonido (`🔊 AUDIO · ECUALIZADOR`)** situada debajo de la línea de tiempo de vídeo, con barras LED segmentadas calculadas a partir del audio real del archivo (`AudioWaveformService`) para identificar visualmente en qué puntos del vídeo hay sonido o silencio.
+- ✂️ Recorte mediante `-c copy` por defecto, sin recodificar vídeo ni audio.
+- 📉 **Opción de reducción a `< 200 MB` con códec HEVC / H.265 de alta eficiencia**: comprime el fragmento utilizando aceleración por hardware (`hevc_nvenc`, `hevc_qsv`, `hevc_amf`) o `libx265` con calidad constante visualmente sin pérdida (`CQ 19` / `CRF 18`) limitada al techo de tasa de bits para garantizar menos de 200 MB y conservando el sonido original (`-c:a copy`).
 - 📦 Conservación de todas las pistas y metadatos compatibles con el contenedor.
 - 🧰 Salida MKV opcional para combinaciones de pistas que el contenedor original no admite.
 - 🎮 Detección de GPU dedicada (NVIDIA CUDA, AMD AMF, Intel QSV), preferencia de alto rendimiento DirectX y precarga activa del vídeo en memoria RAM por defecto.
@@ -35,7 +37,7 @@
 - 📊 Progreso, tiempo transcurrido y tiempo restante estimado.
 - 🖥️ Inicio maximizado por defecto, diseño adaptable, escalado DPI y navegación por teclado.
 - 🧳 Publicación portable de un único EXE (`VCutStudio.exe`), con .NET, FFmpeg y LibVLC incluidos.
-- ✅ 55 pruebas unitarias y de integración ejecutadas en cada compilación.
+- ✅ 59 pruebas unitarias y de integración ejecutadas en cada compilación.
 
 ## 🚀 Uso
 
@@ -81,11 +83,16 @@ La compilación incluida de FFmpeg 9.0.2 expone cientos de demultiplexores y có
 
 VCUT no necesita decodificar el contenido para recortarlo: copia los paquetes existentes. El contenedor de salida debe aceptar todas las pistas de origen. Si una combinación no es válida, activa **Guardar como MKV (máxima compatibilidad)**. Matroska admite más combinaciones de vídeo, audio, subtítulos y datos, y VCUT mantiene todas las pistas con `-map 0` y `-c copy`.
 
-### GPU
+### GPU y Aceleración por Hardware
 
-Al iniciar, VCUT detecta los adaptadores gráficos conectados. Si encuentra una GPU de hardware, LibVLC intenta usarla para decodificar la **previsualización**. Si el controlador o el formato no permiten aceleración, LibVLC puede recurrir al procesador.
+Al iniciar, VCUT detecta los adaptadores gráficos conectados. Si encuentra una GPU de hardware, LibVLC intenta usarla para decodificar la **previsualización**.
 
-El recorte y el remultiplexado a MKV no usan codificación por GPU porque no hay recodificación: FFmpeg copia los paquetes comprimidos. Añadir un codificador NVENC, QSV o AMF cambiaría los datos del vídeo y dejaría de ser el modo sin pérdida actual.
+- **Modo directo (por defecto)**: El recorte y remultiplexado no requieren codificación porque FFmpeg copia los paquetes existentes sin pérdida (`-c copy`).
+- **Modo Alta Eficiencia (< 200 MB)**: VCUT activa un pipeline híbrido ultraoptimizado (GPU + CPU + RAM):
+  - **GPU (NVIDIA NVENC/NVDEC, Intel QSV o AMD AMF)**: Codificación por hardware HEVC/H.265 en preset ultrarrápido (`p2`), permitiendo velocidades de codificación de más de **1.100 fps** (~20x en tiempo real) y decodificación de vídeo con zero-copy en memoria de vídeo (VRAM).
+  - **CPU Multi-hilo (16 hilos)**: Demultiplexado, procesamiento de audio y empaquetado concurrente sin bloquear el motor de codificación, con fallback automático multihilo (`libx265 ultrafast`).
+  - **RAM Buffer**: Cola de fotogramas (`thread_queue_size 8192`) que elimina cuellos de botella de disco e I/O.
+  - **Audio 1:1**: Copia directa de las pistas originales sin pérdida de calidad sonora (`-c:a copy`).
 
 ## 🧾 Registro de actividad
 

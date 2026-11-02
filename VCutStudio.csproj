@@ -11,12 +11,13 @@
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>Assets\vcut.ico</ApplicationIcon>
-    <Version>1.5.0</Version>
-    <AssemblyVersion>1.5.0.0</AssemblyVersion>
-    <FileVersion>1.5.0.0</FileVersion>
+    <Version>1.6.0</Version>
+    <AssemblyVersion>1.6.0.0</AssemblyVersion>
+    <FileVersion>1.6.0.0</FileVersion>
     <Product>VCutStudio</Product>
     <Description>Recorte de vídeo mediante copia directa, sin recodificación.</Description>
     <Optimize>true</Optimize>
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
     <RunTestsOnBuild Condition="'$(RunTestsOnBuild)' == ''">true</RunTestsOnBuild>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
@@ -27,7 +28,7 @@
     <EmbeddedResource Include="Assets\vcut-mark.png" LogicalName="VCUT.Assets.vcut-mark.png" />
     <None Remove="VCUT.Core\**;VCUT.Tests\**;.packages\**;tools\**;Assets\vcut-mark.png;Assets\vcut-source.png;Assets\vcut.ico;Assets\libvlc-plugins.dat" />
     <None Include="Assets\vcut-source.png" />
-    <Content Include="Assets\libvlc-plugins.dat" Link="libvlc\win-x64\plugins\plugins.dat" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\libvlc-plugins.dat" Link="libvlc\win-x64\plugins\plugins.dat" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <ProjectReference Include="VCUT.Core\VCUT.Core.csproj" />
     <ProjectReference Include="VCUT.Tests\VCUT.Tests.csproj" ReferenceOutputAssembly="false" Private="false" Condition="'$(RunTestsOnBuild)' == 'true'" />
     <PackageReference Include="LibVLCSharp.WinForms" Version="3.10.2" />

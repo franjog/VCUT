@@ -19,6 +19,7 @@ public class VideoTimelineControl : Control
     private Bitmap _trackCacheBitmap;
     private bool _trackCacheDirty = true;
     private readonly Font _pillFont = new("Cascadia Mono", 7.5f, FontStyle.Bold);
+    private readonly Font _badgeFont = new("Cascadia Mono", 6.8f, FontStyle.Bold);
     private readonly System.Windows.Forms.Timer _animTimer = new() { Interval = 33 };
 
     public event Action<double> SeekRequested;
@@ -33,8 +34,8 @@ public class VideoTimelineControl : Control
     {
         DoubleBuffered = true;
         BackColor = VcutTheme.Surface;
-        Height = 64;
-        MinimumSize = new Size(120, 52);
+        Height = 56;
+        MinimumSize = new Size(120, 48);
         TabStop = true;
         AccessibleName = "Línea de tiempo del vídeo";
         Cursor = Cursors.Hand;
@@ -59,6 +60,7 @@ public class VideoTimelineControl : Control
             _animTimer.Dispose();
             _trackCacheBitmap?.Dispose();
             _pillFont.Dispose();
+            _badgeFont.Dispose();
         }
 
         base.Dispose(disposing);
@@ -165,19 +167,19 @@ public class VideoTimelineControl : Control
             g.FillPath(baseBrush, basePath);
 
             g.SetClip(basePath);
-            int barCount = Math.Max(16, (int)(widthAvailable / 7.0f));
-            float step = widthAvailable / barCount;
-            using var wavePenMuted = new Pen(Color.FromArgb(48, 128, 114, 162), 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            for (int i = 0; i < barCount; i++)
+            int tickCount = Math.Max(20, (int)(widthAvailable / 8.0f));
+            float step = widthAvailable / tickCount;
+            using var tickPenMuted = new Pen(Color.FromArgb(46, 134, 120, 174), 1.4f);
+            for (int i = 0; i < tickCount; i++)
             {
                 float bx = left + i * step + step * 0.5f;
-                float norm = (float)i / barCount;
-                float waveAmp = (float)(0.25 + 0.55 * Math.Abs(Math.Sin(i * 0.63 + 1.2) * Math.Cos(i * 0.27)));
-                float halfH = Math.Max(2.0f, trackHeight * 0.42f * waveAmp);
-                float cy = trackY + trackHeight / 2.0f;
+                float norm = (float)i / tickCount;
                 if (norm < _selectionStart || norm > _selectionEnd)
                 {
-                    g.DrawLine(wavePenMuted, bx, cy - halfH, bx, cy + halfH);
+                    bool major = (i % 5) == 0;
+                    float tickLen = major ? 6.5f : 3.5f;
+                    g.DrawLine(tickPenMuted, bx, trackY + 2.0f, bx, trackY + 2.0f + tickLen);
+                    g.DrawLine(tickPenMuted, bx, trackY + trackHeight - 2.0f - tickLen, bx, trackY + trackHeight - 2.0f);
                 }
             }
 
@@ -211,10 +213,10 @@ public class VideoTimelineControl : Control
             g.FillPath(selBrush, selectionPath);
 
             g.SetClip(selectionPath);
-            int barCount = Math.Max(16, (int)(widthAvailable / 7.0f));
-            float step = widthAvailable / barCount;
-            using var wavePenActive = new Pen(Color.FromArgb(190, 255, 240, 248), 2.2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            for (int i = 0; i < barCount; i++)
+            int tickCount = Math.Max(20, (int)(widthAvailable / 8.0f));
+            float step = widthAvailable / tickCount;
+            using var tickPenActive = new Pen(Color.FromArgb(170, 255, 240, 250), 1.5f);
+            for (int i = 0; i < tickCount; i++)
             {
                 float bx = left + i * step + step * 0.5f;
                 if (bx < selectionLeft || bx > selectionRight)
@@ -222,10 +224,31 @@ public class VideoTimelineControl : Control
                     continue;
                 }
 
-                float waveAmp = (float)(0.25 + 0.58 * Math.Abs(Math.Sin(i * 0.63 + 1.2) * Math.Cos(i * 0.27)));
-                float halfH = Math.Max(2.5f, trackHeight * 0.44f * waveAmp);
-                float cy = trackY + trackHeight / 2.0f;
-                g.DrawLine(wavePenActive, bx, cy - halfH, bx, cy + halfH);
+                bool major = (i % 5) == 0;
+                float tickLen = major ? 7.0f : 4.0f;
+                g.DrawLine(tickPenActive, bx, trackY + 2.0f, bx, trackY + 2.0f + tickLen);
+                g.DrawLine(tickPenActive, bx, trackY + trackHeight - 2.0f - tickLen, bx, trackY + trackHeight - 2.0f);
+            }
+
+            string videoTag = "🎬 VÍDEO";
+            Size tagSize = TextRenderer.MeasureText(videoTag, _badgeFont);
+            var tagRect = new RectangleF(left + 7.0f, trackY + (trackHeight - 15.0f) / 2.0f, tagSize.Width + 10.0f, 15.0f);
+            using (GraphicsPath clipPath = VcutTheme.RoundedRectangle(track, 8.0f))
+            using (GraphicsPath tagPath = VcutTheme.RoundedRectangle(tagRect, 4.0f))
+            using (var tagBrush = new SolidBrush(Color.FromArgb(190, 16, 12, 30)))
+            using (var tagBorder = new Pen(Color.FromArgb(110, VcutTheme.AccentHover), 1.0f))
+            {
+                g.ResetClip();
+                g.SetClip(clipPath);
+                g.FillPath(tagBrush, tagPath);
+                g.DrawPath(tagBorder, tagPath);
+                TextRenderer.DrawText(
+                    g,
+                    videoTag,
+                    _badgeFont,
+                    Rectangle.Round(tagRect),
+                    VcutTheme.AccentHover,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
             }
 
             g.ResetClip();

@@ -300,4 +300,58 @@ public class VideoIntegrationTests
             Assert.IsTrue(frame.Length > 100 && frame[0] == 0xFF && frame[1] == 0xD8);
         }
     }
+
+    [TestMethod]
+    public async Task AudioWaveformDistinguishesSoundAndSilenceInRealVideo()
+    {
+        string halfToneSilentPath = Path.Combine(_directory, "tone_then_silence.mp4");
+        string ffmpeg = Path.Combine(ToolsPath, "ffmpeg.exe");
+        string[] args =
+        {
+            "-hide_banner", "-v", "error", "-nostdin", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=25:duration=4",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+            "-af", @"volume=0:enable=gte(t\,2)",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "128k",
+            halfToneSilentPath
+        };
+
+        ProcessResult createRes = await MediaProcess.RunAsync(ffmpeg, args, CancellationToken.None);
+        Assert.AreEqual(0, createRes.ExitCode, createRes.Errors);
+
+        var audioService = new AudioWaveformService(ToolsPath);
+        float[] levels = await audioService.AnalyzeAudioEnvelopeAsync(
+            halfToneSilentPath,
+            TimeSpan.FromSeconds(4.0),
+            bucketCount: 40,
+            onProgress: null,
+            cancellationToken: CancellationToken.None);
+
+        Assert.AreEqual(40, levels.Length);
+        float soundAvg = levels.Take(16).Average();
+        float silenceAvg = levels.Skip(24).Average();
+        Assert.IsTrue(soundAvg > 0.50f, $"La primera mitad con tono real debe tener nivel alto (actual={soundAvg:0.000}).");
+        Assert.IsTrue(silenceAvg < 0.02f, $"La segunda mitad en silencio debe ser ~0 (actual={silenceAvg:0.000}).");
+    }
+
+    [TestMethod]
+    public async Task LimitUnder200MbExportsValidHevcVideoPreservingResolutionAndAudio()
+    {
+        string source = await CreateVideoAsync(".mp4", withAudio: true);
+        VideoInfo info = await Service.ProbeAsync(source, CancellationToken.None);
+        var request = new CutRequest(info, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), OutputContainer.Original, limitUnder200Mb: true);
+
+        string output = await Service.CutAsync(request, null, CancellationToken.None);
+        Assert.IsTrue(File.Exists(output));
+
+        long outputBytes = new FileInfo(output).Length;
+        Assert.IsTrue(outputBytes > 0 && outputBytes < CutRequest.HardLimit200MbBytes);
+
+        VideoInfo cutInfo = await Service.ProbeAsync(output, CancellationToken.None);
+        Assert.AreEqual("hevc", cutInfo.Codec);
+        Assert.AreEqual(info.Width, cutInfo.Width);
+        Assert.AreEqual(info.Height, cutInfo.Height);
+        Assert.AreEqual("aac", cutInfo.AudioCodec);
+    }
 }

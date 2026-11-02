@@ -15,6 +15,7 @@ public partial class principal
     private static readonly Color AccentColor = VcutTheme.Accent;
     private readonly VideoService _service = new(Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg"));
     private readonly VideoThumbnailService _thumbnailService = new(Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg"));
+    private readonly AudioWaveformService _audioWaveformService = new(Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg"));
     private readonly TimelineThumbnailPopup _thumbnailPopup = new();
     private readonly VideoRamCache _ramCache = new();
     private readonly System.Windows.Forms.Timer _clock = new() { Interval = 50 };
@@ -39,6 +40,7 @@ public partial class principal
     private readonly BadgeLabel _badgeHardware = MakeStyledBadge("RAM + GPU", BadgeStyle.Coral);
     private readonly BadgeLabel _badgePreviewState = MakeStyledBadge("EN ESPERA", BadgeStyle.Neutral);
     private readonly BadgeLabel _badgeClipShare = MakeStyledBadge("100% DEL VÍDEO", BadgeStyle.Coral);
+    private readonly BadgeLabel _badgeCutMode = MakeStyledBadge("COPIA 1:1", BadgeStyle.Coral);
     private readonly Label _positionLabel = MakeLabel("00:00:00.000  /  00:00:00.000", 10.5f, true, false);
     private readonly Label _selectionLabel = MakeLabel("00:00:00.000", 15.0f, true);
     private readonly Label _outputLabel = MakeLabel("Destino: carpeta del archivo original", 9.0f, false, true);
@@ -72,7 +74,20 @@ public partial class principal
         Padding = new Padding(4, 0, 0, 0),
         AccessibleName = "Guardar como MKV"
     };
+    private readonly CheckBox _under200MbCheckBox = new()
+    {
+        Text = "📉 Reducir tamaño a < 200 MB (códec HEVC/H.265 · sin pérdida visual)",
+        Dock = DockStyle.Fill,
+        Font = new Font("Segoe UI Variable Text", 9.0f),
+        ForeColor = VcutTheme.TextPrimary,
+        BackColor = Color.Transparent,
+        FlatStyle = FlatStyle.Flat,
+        Cursor = Cursors.Hand,
+        Padding = new Padding(4, 0, 0, 0),
+        AccessibleName = "Reducir tamaño a menos de 200 MB"
+    };
     private readonly VideoTimelineControl _timeline = new() { Dock = DockStyle.Fill, Enabled = false };
+    private readonly AudioEqualizerControl _audioTimeline = new() { Dock = DockStyle.Fill, Enabled = false };
     private readonly ThinProgressBar _progress = new() { Dock = DockStyle.Fill, Maximum = 1000 };
     private readonly VideoView _videoView = new() { Dock = DockStyle.Fill, BackColor = Color.Black };
     private readonly HighQualityPictureBox _monitorFrameBox = new()
@@ -87,10 +102,11 @@ public partial class principal
     private readonly TableLayoutPanel _body = new() { Dock = DockStyle.Fill, Margin = new Padding(0) };
     private readonly RoundedTableLayoutPanel _previewCard = new() { Dock = DockStyle.Fill, FillColor = CardColor, BorderColor = VcutTheme.Border, CornerRadius = 18, Padding = new Padding(16), Margin = new Padding(0, 0, 14, 0) };
     private readonly RoundedTableLayoutPanel _marksCard = new() { Dock = DockStyle.Fill, FillColor = CardColor, BorderColor = VcutTheme.Border, CornerRadius = 18, Padding = new Padding(18), Margin = new Padding(0) };
+    private static readonly string AppVersion = typeof(principal).Assembly.GetName().Version?.ToString(3) ?? "1.6.0";
     private readonly RoundedTableLayoutPanel _fileCard = new() { Dock = DockStyle.Fill, FillColor = VcutTheme.Surface, BorderColor = VcutTheme.Border, CornerRadius = 16, Padding = new Padding(14, 8, 14, 8), Margin = new Padding(0, 0, 0, 10) };
     private readonly RoundedTableLayoutPanel _statusCard = new() { Dock = DockStyle.Fill, FillColor = VcutTheme.Surface, BorderColor = VcutTheme.Border, CornerRadius = 16, Padding = new Padding(16, 10, 16, 10), Margin = new Padding(0, 10, 0, 0) };
     private readonly RoundedTableLayoutPanel _heroSelectionCard = new() { Dock = DockStyle.Fill, FillColor = VcutTheme.SurfaceRaised, FillColorBottom = Color.FromArgb(24, 18, 42), BorderColor = VcutTheme.BorderStrong, CornerRadius = 14, Padding = new Padding(12, 8, 12, 8), Margin = new Padding(0, 2, 0, 6), ShowTopAccentBar = false };
-    private readonly Label _brandSubtitle = MakeLabel("STUDIO  ·  DIRECT STREAM ENGINE", 8.0f, true, true);
+    private readonly Label _brandSubtitle = MakeLabel($"v{AppVersion}  ·  DIRECT STREAM ENGINE", 8.0f, true, true);
     private readonly Image _brandImage = LoadBrandImage();
     private readonly ToolTip _toolTip = new();
     private ColumnStyle _headerBrandStyle;
@@ -106,6 +122,7 @@ public partial class principal
     private readonly System.Collections.Concurrent.ConcurrentDictionary<byte[], Bitmap> _decodedBitmapByJpeg = new(ReferenceEqualityComparer.Instance);
     private readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> _decodedBitmapOrder = new();
     private CancellationTokenSource _thumbPrewarmCts;
+    private CancellationTokenSource _audioWaveCts;
     private CancellationTokenSource _thumbHoverCts;
     private CancellationTokenSource _monitorFrameCts;
     private Task _monitorFrameWorkerTask;
@@ -148,6 +165,7 @@ public partial class principal
         _endBox.TextChanged += (_, _) => UpdateSelection();
         _ramGpuCheckBox.CheckedChanged += RamGpuModeChanged;
         _mkvCheckBox.CheckedChanged += OutputContainerChanged;
+        _under200MbCheckBox.CheckedChanged += Under200MbOptionChanged;
         _cutButton.Click += CutClicked;
         _cancelButton.Click += (_, _) => CancelOperation();
         _folderButton.Click += (_, _) => RevealOutput();
@@ -331,7 +349,7 @@ public partial class principal
     {
         SuspendLayout();
         Name = "principal";
-        Text = "VCutStudio · Recorte de vídeo instantáneo sin pérdida";
+        Text = $"VCutStudio v{AppVersion} · Recorte de vídeo instantáneo sin pérdida";
         Font = new Font("Segoe UI Variable Text", 10);
         BackColor = PageColor;
         ForeColor = VcutTheme.TextPrimary;
@@ -464,19 +482,22 @@ public partial class principal
         _toolTip.SetToolTip(_endBox, "Horas:minutos:segundos.milisegundos · 00:02:10.000");
         _toolTip.SetToolTip(_ramGpuCheckBox, "Precarga el vídeo en memoria RAM para acceso instantáneo y usa la GPU dedicada para acelerar la apertura y previsualización.");
         _toolTip.SetToolTip(_mkvCheckBox, "Remultiplexa todas las pistas a Matroska sin recodificarlas. Úsalo si el contenedor original no las admite.");
+        _toolTip.SetToolTip(_under200MbCheckBox, "Comprime el fragmento a menos de 200 MB utilizando el códec de alta eficiencia HEVC/H.265 (acelerado por GPU NVENC/QSV/AMF o libx265) conservando la calidad de imagen y el sonido original.");
+        _toolTip.SetToolTip(_audioTimeline, "Línea de tiempo informativa de sonido (ecualizador real): muestra en qué puntos del vídeo hay sonido o silencio.");
         ResumeLayout(true);
     }
 
     private void BuildPreviewCard()
     {
         _previewCard.ColumnCount = 1;
-        _previewCard.RowCount = 4;
+        _previewCard.RowCount = 5;
         _previewCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         foreach (RowStyle row in new[]
         {
             new RowStyle(SizeType.Absolute, 38),
             new RowStyle(SizeType.Percent, 100),
-            new RowStyle(SizeType.Absolute, 68),
+            new RowStyle(SizeType.Absolute, 58),
+            new RowStyle(SizeType.Absolute, 46),
             new RowStyle(SizeType.Absolute, 48)
         })
         {
@@ -528,6 +549,7 @@ public partial class principal
 
         _previewCard.Controls.Add(canvas, 0, 1);
         _previewCard.Controls.Add(_timeline, 0, 2);
+        _previewCard.Controls.Add(_audioTimeline, 0, 3);
 
         // Studio Transport Deck directly below timeline
         var transport = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Margin = new Padding(0, 2, 0, 0) };
@@ -548,7 +570,7 @@ public partial class principal
         transport.Controls.Add(_playButton, 2, 0);
         transport.Controls.Add(_jumpForwardButton, 3, 0);
         transport.Controls.Add(_markEndButton, 4, 0);
-        _previewCard.Controls.Add(transport, 0, 3);
+        _previewCard.Controls.Add(transport, 0, 4);
     }
 
     private void PaintAnimatedEmptyState(object sender, PaintEventArgs e)
@@ -621,10 +643,10 @@ public partial class principal
     private void BuildMarksCard()
     {
         _marksCard.ColumnCount = 2;
-        _marksCard.RowCount = 10;
+        _marksCard.RowCount = 11;
         _marksCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         _marksCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        foreach (float rowHeight in new float[] { 36, 76, 24, 44, 46, 32, 32, 36, 54 })
+        foreach (float rowHeight in new float[] { 36, 76, 24, 44, 46, 30, 30, 30, 34, 54 })
         {
             _marksCard.RowStyles.Add(new RowStyle(SizeType.Absolute, rowHeight));
         }
@@ -633,12 +655,11 @@ public partial class principal
 
         var cutHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(0) };
         cutHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        cutHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115));
+        cutHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         cutHeader.Controls.Add(MakeLabel("✂  Inspector de corte", 12.0f, true), 0, 0);
-        BadgeLabel badgeLossless = MakeStyledBadge("COPIA 1:1", BadgeStyle.Coral);
-        badgeLossless.Width = 105;
-        badgeLossless.Height = 24;
-        cutHeader.Controls.Add(badgeLossless, 1, 0);
+        _badgeCutMode.Width = 115;
+        _badgeCutMode.Height = 24;
+        cutHeader.Controls.Add(_badgeCutMode, 1, 0);
         AddWide(_marksCard, cutHeader, 0);
 
         // Hero Duration Sub-Card
@@ -673,17 +694,18 @@ public partial class principal
         AddWide(_marksCard, _previewButton, 4);
         AddWide(_marksCard, _ramGpuCheckBox, 5);
         AddWide(_marksCard, _mkvCheckBox, 6);
-        AddWide(_marksCard, _outputLabel, 7);
+        AddWide(_marksCard, _under200MbCheckBox, 7);
+        AddWide(_marksCard, _outputLabel, 8);
 
         _cutButton.Height = 48;
         _cutButton.Font = new Font("Segoe UI Variable Text", 10.2f, FontStyle.Bold);
-        AddWide(_marksCard, _cutButton, 8);
+        AddWide(_marksCard, _cutButton, 9);
 
         Label help = MakeLabel("Atajos rápidos: Espacio (Reproducir/Pausar) · I (Inicio) · O (Fin) · ←/→ (Ajuste fino en línea de tiempo).", 8.3f, false, true);
         help.AutoEllipsis = false;
         help.TextAlign = ContentAlignment.TopLeft;
         help.Padding = new Padding(0, 6, 0, 0);
-        AddWide(_marksCard, help, 9);
+        AddWide(_marksCard, help, 10);
     }
 
     private static void AddWide(TableLayoutPanel panel, Control control, int row)
@@ -827,6 +849,9 @@ public partial class principal
         _thumbPrewarmCts?.Cancel();
         _thumbPrewarmCts?.Dispose();
         _thumbPrewarmCts = new CancellationTokenSource();
+        _audioWaveCts?.Cancel();
+        _audioWaveCts?.Dispose();
+        _audioWaveCts = new CancellationTokenSource();
         _ramPreloadCts?.Cancel();
         _ramPreloadCts?.Dispose();
         _ramPreloadCts = new CancellationTokenSource();
@@ -898,6 +923,7 @@ public partial class principal
             _endBox.Text = Timecode.Format(TimeSpan.FromMilliseconds(Math.Floor(_video.Duration.TotalMilliseconds)));
             _fileName.Text = Path.GetFileName(filePath);
             _toolTip.SetToolTip(_fileName, _video.FilePath);
+            Text = $"VCutStudio v{AppVersion} · {Path.GetFileName(filePath)}";
 
             string ext = Path.GetExtension(filePath).TrimStart('.').ToUpperInvariant();
             _badgeFormat.Text = string.IsNullOrEmpty(ext) ? "VÍDEO" : ext;
@@ -940,6 +966,12 @@ public partial class principal
             _timeline.TotalDurationSeconds = _video.Duration.TotalSeconds;
             _timeline.Position = 0;
             _timeline.SetSelection(0, 1);
+            _audioTimeline.TotalDurationSeconds = _video.Duration.TotalSeconds;
+            _audioTimeline.Position = 0;
+            _audioTimeline.SetSelection(0, 1);
+            bool hasAudioTrack = !string.IsNullOrWhiteSpace(_video.AudioCodec) &&
+                                 !string.Equals(_video.AudioCodec, "sin audio", StringComparison.OrdinalIgnoreCase);
+            _audioTimeline.ResetState(isLoading: hasAudioTrack, hasAudioTrack: hasAudioTrack);
             _currentPositionMs = 0;
             _renderedMonitorBucket = -1;
             _lastLookaheadCenterBucket = -1000;
@@ -951,6 +983,33 @@ public partial class principal
             {
                 CancellationToken prewarmToken = _thumbPrewarmCts.Token;
                 _ = Task.Run(() => _thumbnailService.PrewarmAllHalfSecondsAsync(prewarmToken), prewarmToken);
+            }
+            if (hasAudioTrack && _audioWaveCts is not null)
+            {
+                CancellationToken audioToken = _audioWaveCts.Token;
+                string audioFilePath = _video.FilePath;
+                TimeSpan audioDuration = _video.Duration;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _audioWaveformService.AnalyzeAudioEnvelopeAsync(
+                            audioFilePath,
+                            audioDuration,
+                            bucketCount: 360,
+                            onProgress: levels => PostToUi(() =>
+                            {
+                                if (!audioToken.IsCancellationRequested && _video is not null && _video.FilePath == audioFilePath)
+                                {
+                                    _audioTimeline.SetAudioLevels(levels, isLoading: false, hasAudioTrack: true);
+                                }
+                            }),
+                            cancellationToken: audioToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
+                }, audioToken);
             }
             _positionLabel.Text = $"00:00:00.000  /  {Timecode.Format(_video.Duration)}";
             _previewSelection = false;
@@ -1124,6 +1183,7 @@ public partial class principal
         }
 
         _timeline.Position = clampedFraction;
+        _audioTimeline.Position = clampedFraction;
         var targetSpan = TimeSpan.FromMilliseconds(target);
         _positionLabel.Text = $"{Timecode.Format(targetSpan)}  /  {Timecode.Format(_video.Duration)}";
 
@@ -1488,6 +1548,7 @@ public partial class principal
 
         _lastHoverFraction = fraction;
         _lastHoverScreenAnchor = screenAnchor;
+        _audioTimeline.ExternalHoverFraction = fraction;
         string timeText = Timecode.Format(TimeSpan.FromSeconds(fraction * _video.Duration.TotalSeconds));
 
         _thumbnailService.TryGetClosestFrame(fraction, out byte[] closestBytes);
@@ -1545,6 +1606,7 @@ public partial class principal
     private void OnTimelineHoverEnded()
     {
         Interlocked.Exchange(ref _desiredHoverFraction, -1.0);
+        _audioTimeline.ExternalHoverFraction = -1.0;
         _thumbnailPopup.HidePopup();
     }
 
@@ -1594,13 +1656,29 @@ public partial class principal
         }
 
         OutputContainer container = _mkvCheckBox.Checked ? OutputContainer.Matroska : OutputContainer.Original;
-        return new CutRequest(_video, startTime, endTime, container);
+        return new CutRequest(_video, startTime, endTime, container, _under200MbCheckBox.Checked);
     }
 
     private void OutputContainerChanged(object sender, EventArgs e)
     {
         UpdateOutputPreview();
-        AppLogger.Info("SALIDA", _mkvCheckBox.Checked ? "Seleccionado contenedor Matroska (.mkv), sin recodificación." : "Seleccionado el contenedor original, sin recodificación.");
+        AppLogger.Info("SALIDA", _mkvCheckBox.Checked ? "Seleccionado contenedor Matroska (.mkv)." : "Seleccionado el contenedor original.");
+    }
+
+    private void Under200MbOptionChanged(object sender, EventArgs e)
+    {
+        bool active = _under200MbCheckBox.Checked;
+        _under200MbCheckBox.ForeColor = active ? VcutTheme.Success : VcutTheme.TextPrimary;
+        _under200MbCheckBox.Font = new Font("Segoe UI Variable Text", 9.0f, active ? FontStyle.Bold : FontStyle.Regular);
+        _badgeCutMode.Text = active ? "< 200 MB · HEVC" : "COPIA 1:1";
+        _badgeCutMode.Style = active ? BadgeStyle.Mint : BadgeStyle.Coral;
+        _cutButton.Text = active
+            ? "✂  EXPORTAR RECORTE (< 200 MB · HEVC)"
+            : "✂  EXPORTAR RECORTE SIN PÉRDIDA";
+        UpdateOutputPreview();
+        AppLogger.Info("SALIDA", active
+            ? "Activada opción < 200 MB (códec HEVC/H.265 de alta eficiencia manteniendo calidad de imagen y sonido)."
+            : "Desactivada opción < 200 MB; restaurado modo copia directa (-c copy).");
     }
 
     private void UpdateOutputPreview()
@@ -1611,8 +1689,13 @@ public partial class principal
         }
 
         OutputContainer container = _mkvCheckBox.Checked ? OutputContainer.Matroska : OutputContainer.Original;
-        string output = new CutRequest(_video, TimeSpan.Zero, _video.Duration, container).OutputPath;
-        _outputLabel.Text = "Destino: " + Path.GetFileName(output) + (container == OutputContainer.Matroska ? "  ·  MKV sin pérdida" : "  ·  Formato original");
+        bool under200Mb = _under200MbCheckBox.Checked;
+        var previewReq = new CutRequest(_video, TimeSpan.Zero, _video.Duration, container, under200Mb);
+        string output = previewReq.OutputPath;
+        string modeDesc = under200Mb
+            ? "  ·  < 200 MB (HEVC/H.265 + Audio 1:1)"
+            : (container == OutputContainer.Matroska ? "  ·  MKV sin pérdida" : "  ·  Formato original");
+        _outputLabel.Text = "Destino: " + Path.GetFileName(output) + modeDesc;
         _toolTip.SetToolTip(_outputLabel, output);
     }
 
@@ -1631,9 +1714,10 @@ public partial class principal
             double share = Math.Clamp(request.Duration.TotalSeconds / Math.Max(0.001, _video.Duration.TotalSeconds) * 100.0, 0.1, 100.0);
             _badgeClipShare.Text = $"{share:0.#}% DEL TOTAL";
             _badgeClipShare.Style = BadgeStyle.Coral;
-            _timeline.SetSelection(
-                request.StartTime.TotalSeconds / _video.Duration.TotalSeconds,
-                request.EndTime.TotalSeconds / _video.Duration.TotalSeconds);
+            double startFrac = request.StartTime.TotalSeconds / _video.Duration.TotalSeconds;
+            double endFrac = request.EndTime.TotalSeconds / _video.Duration.TotalSeconds;
+            _timeline.SetSelection(startFrac, endFrac);
+            _audioTimeline.SetSelection(startFrac, endFrac);
             _toolTip.SetToolTip(_selectionLabel, null);
             _cutButton.Enabled = !_busy;
             _previewButton.Enabled = !_busy && _player is not null;
@@ -1662,7 +1746,9 @@ public partial class principal
             CutRequest request = CurrentRequest();
             long startMs = (long)Math.Clamp(request.StartTime.TotalMilliseconds, 0, Math.Max(0, _video.Duration.TotalMilliseconds - 1));
             _currentPositionMs = startMs;
-            _timeline.Position = Math.Clamp(request.StartTime.TotalSeconds / _video.Duration.TotalSeconds, 0, 1);
+            double startPos = Math.Clamp(request.StartTime.TotalSeconds / _video.Duration.TotalSeconds, 0, 1);
+            _timeline.Position = startPos;
+            _audioTimeline.Position = startPos;
             _positionLabel.Text = $"{Timecode.Format(request.StartTime)}  /  {Timecode.Format(_video.Duration)}";
             HideMonitorFrameOverlay();
             if (_atEnd)
@@ -1717,10 +1803,12 @@ public partial class principal
         SetBusy(true);
         _badgePreviewState.Text = "EXPORTANDO…";
         _badgePreviewState.Style = BadgeStyle.Coral;
-        _statusLabel.Text = "●  Exportando recorte mediante copia directa desde RAM (sin recodificar)…";
+        _statusLabel.Text = request.LimitUnder200Mb
+            ? "●  Exportando a < 200 MB con códec HEVC/H.265 de alta eficiencia (sin pérdida visual ni de sonido)…"
+            : "●  Exportando recorte mediante copia directa desde RAM (sin recodificar)…";
         _statusLabel.ForeColor = VcutTheme.AccentHover;
         _remainingLabel.Text = "Restante estimado  ·  Calculando…";
-        AppLogger.Info("RECORTE", $"Inicio. Origen={request.Video.FilePath}; destino={request.OutputPath}; inicio={Timecode.Format(request.StartTime)}; fin={Timecode.Format(request.EndTime)}; duración={Timecode.Format(request.Duration)}; contenedor={request.Container}. Copia directa (-c copy).");
+        AppLogger.Info("RECORTE", $"Inicio. Origen={request.Video.FilePath}; destino={request.OutputPath}; inicio={Timecode.Format(request.StartTime)}; fin={Timecode.Format(request.EndTime)}; duración={Timecode.Format(request.Duration)}; contenedor={request.Container}; menor200MB={request.LimitUnder200Mb}.");
 
         var progress = new Progress<CutProgress>(update =>
         {
@@ -1733,7 +1821,9 @@ public partial class principal
             _progress.Value = (int)Math.Clamp(update.Percent * 10, 0, 1000);
             _statusLabel.Text = update.Percent >= 99.9 && update.Percent < 100
                 ? "●  Finalizando y verificando archivo…"
-                : $"●  Exportando recorte  ·  {update.Percent:0}%";
+                : (request.LimitUnder200Mb
+                    ? $"●  Comprimiendo con HEVC/H.265 (< 200 MB)  ·  {update.Percent:0}%"
+                    : $"●  Exportando recorte  ·  {update.Percent:0}%");
         });
 
         try
@@ -1742,11 +1832,13 @@ public partial class principal
             _progress.Value = 1000;
             _badgePreviewState.Text = "EXPORTADO";
             _badgePreviewState.Style = BadgeStyle.Mint;
-            _statusLabel.Text = "✔  Guardado con éxito: " + Path.GetFileName(_lastOutput);
+            long outBytes = new FileInfo(_lastOutput).Length;
+            double outMb = outBytes / (1024.0 * 1024.0);
+            _statusLabel.Text = $"✔  Guardado con éxito: {Path.GetFileName(_lastOutput)} ({outMb:0.1} MB)";
             _statusLabel.ForeColor = VcutTheme.Success;
             _toolTip.SetToolTip(_statusLabel, _lastOutput);
-            _remainingLabel.Text = "Completado";
-            AppLogger.Info("RECORTE", $"Completado. Destino={_lastOutput}; tamaño={new FileInfo(_lastOutput).Length} bytes; tiempo={_watch.Elapsed}.");
+            _remainingLabel.Text = $"Completado · {outMb:0.1} MB";
+            AppLogger.Info("RECORTE", $"Completado. Destino={_lastOutput}; tamaño={outBytes} bytes ({outMb:0.1} MB); tiempo={_watch.Elapsed}.");
         }
         catch (OperationCanceledException)
         {
@@ -1814,7 +1906,9 @@ public partial class principal
                 TimeSpan current = _atEnd
                     ? _video.Duration
                     : TimeSpan.FromMilliseconds(_currentPositionMs);
-                _timeline.Position = Math.Clamp(current.TotalSeconds / _video.Duration.TotalSeconds, 0, 1);
+                double livePos = Math.Clamp(current.TotalSeconds / _video.Duration.TotalSeconds, 0, 1);
+                _timeline.Position = livePos;
+                _audioTimeline.Position = livePos;
                 _positionLabel.Text = $"{Timecode.Format(current)}  /  {Timecode.Format(_video.Duration)}";
 
                 if (_previewSelection && Timecode.TryParse(_endBox.Text, out TimeSpan finish) && current >= finish)
@@ -1863,7 +1957,9 @@ public partial class principal
         _jumpBackButton.Enabled = loaded && _player is not null;
         _jumpForwardButton.Enabled = loaded && _player is not null;
         _timeline.Enabled = loaded && _player is not null;
+        _audioTimeline.Enabled = loaded && _player is not null;
         _mkvCheckBox.Enabled = loaded;
+        _under200MbCheckBox.Enabled = loaded;
         _cutButton.Enabled = loaded;
         _previewButton.Enabled = loaded && _player is not null;
         UpdateSelection();
@@ -2054,12 +2150,15 @@ public partial class principal
         _thumbHoverCts?.Dispose();
         _thumbPrewarmCts?.Cancel();
         _thumbPrewarmCts?.Dispose();
+        _audioWaveCts?.Cancel();
+        _audioWaveCts?.Dispose();
         _ramPreloadCts?.Cancel();
         _ramPreloadCts?.Dispose();
         _operation?.Cancel();
         ClearDecodedBitmaps(keepCurrentDisplayed: false);
         _monitorFrameBox.Image?.Dispose();
         _monitorFrameBox.Dispose();
+        _audioTimeline.Dispose();
         _thumbnailPopup.Dispose();
         _thumbnailService.Dispose();
         _player?.Dispose();

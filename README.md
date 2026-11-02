@@ -7,10 +7,10 @@
 <p align="center"><strong>Recorta rápido. Conserva la calidad.</strong></p>
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/version-1.5.0-2DD4BF">
+  <img alt="Versión" src="https://img.shields.io/badge/version-1.6.0-2DD4BF">
   <img alt="C#" src="https://img.shields.io/badge/C%23-.NET%2010-512BD4">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-x64-0078D4">
-  <img alt="Pruebas" src="https://img.shields.io/badge/tests-55%20passing-2DD4BF">
+  <img alt="Pruebas" src="https://img.shields.io/badge/tests-59%20passing-2DD4BF">
 </p>
 
 Aplicación de escritorio **VCutStudio** en **C#, Windows Forms y .NET 10** para recortar vídeos mediante copia directa de sus pistas, sin recodificarlas.
@@ -26,7 +26,7 @@ Abre `VCutStudio.slnx` con **Visual Studio 2026**, selecciona **VCutStudio** com
 1. Pulsa **Abrir vídeo** o arrastra un archivo a la ventana.
 2. Reproduce, salta cinco segundos o desplázate por la línea de tiempo (pasa el ratón para ver una miniatura cada 0,5 s, o haz clic y arrastra sin soltar para actualizar al instante el **Monitor de estudio** a máxima calidad). Usa **[ I ] Fijar inicio** y **Fijar fin [ O ]**, o escribe las marcas como `hh:mm:ss.fff`.
 3. **Previsualizar intervalo seleccionado** permite comprobar el fragmento elegido.
-4. Si el contenedor original no acepta alguna pista, activa **Guardar como MKV**. La operación sigue usando copia directa, sin recodificar.
+4. Si el contenedor original no acepta alguna pista, activa **Guardar como MKV**. Si necesitas garantizar un archivo inferior a 200 MB manteniendo la calidad de imagen y el sonido original, activa **Reducir tamaño a < 200 MB (códec HEVC/H.265 · sin pérdida visual)**.
 5. Pulsa **EXPORTAR RECORTE SIN PÉRDIDA**. El resultado se guarda junto al original: `vacaciones.mp4` → `vacaciones_cut.mp4` o `vacaciones_cut.mkv`.
 6. **Mostrar archivo** selecciona el resultado en el Explorador de archivos.
 
@@ -79,7 +79,7 @@ El original no se modifica. Si ya existe `_cut`, se pide renombrarlo o moverlo; 
 
 `VCUT.Tests` es un proyecto MSTest en C# independiente de la interfaz. Se compila como dependencia de construcción de VCutStudio (sin enlazar su ensamblado a la aplicación) y su destino `RunTestsAfterBuild` ejecuta VSTest sobre el ensamblado recién compilado. Un fallo devuelve un error de compilación. La comprobación rápida de Visual Studio está desactivada en ambos proyectos para que **Compilar** vuelva a ejecutar las pruebas aunque no haya cambios.
 
-Las 55 pruebas cubren validación de marcas, nombres de salida original y MKV, detección de GPU, caché RAM, lector nativo ISO-BMFF, caché de fotogramas a resolución nativa cada 0,5 s, tiempos y culturas, metadatos, progreso, estimación, cancelación, limpieza de temporales, archivos existentes y recortes reales. Los vídeos sintéticos se crean en una carpeta temporal única y se eliminan después. Se comparan hashes SHA256 de paquetes de vídeo para verificar que sus bytes se conservan, además de decodificar el resultado y comprobar las pistas de audio.
+Las 59 pruebas cubren validación de marcas, nombres de salida original y MKV, modo de alta eficiencia `< 200 MB` con códec HEVC/H.265 (`hevc_nvenc`/`hevc_qsv`/`hevc_amf`/`libx265`), detección de GPU, caché RAM, lector nativo ISO-BMFF, caché de fotogramas a resolución nativa cada 0,5 s, ecualizador informativo de sonido/silencio (`AudioWaveformService`), tiempos y culturas, metadatos, progreso, estimación, cancelación, limpieza de temporales, archivos existentes y recortes reales. Los vídeos sintéticos se crean en una carpeta temporal única y se eliminan después. Se comparan hashes SHA256 de paquetes de vídeo para verificar que sus bytes se conservan, además de decodificar el resultado y comprobar las pistas de audio.
 
 ```powershell
 # Compilar y probar (Debug o Release)

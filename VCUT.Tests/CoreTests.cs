@@ -205,5 +205,44 @@ public class CoreTests
             }
         }
     }
+
+    [TestMethod]
+    public void AudioEnvelopeNormalizesSoundAndPreservesTrueSilence()
+    {
+        float[] allSilent = AudioWaveformService.NormalizeEnvelope(new double[] { 0.0, 0.0005, 0.0010 });
+        Assert.AreEqual(3, allSilent.Length);
+        Assert.IsTrue(allSilent.All(v => v == 0.0f));
+
+        float[] mixed = AudioWaveformService.NormalizeEnvelope(new double[] { 0.0, 0.0008, 0.12, 0.35, 0.0 });
+        Assert.AreEqual(0.0f, mixed[0]);
+        Assert.AreEqual(0.0f, mixed[1]);
+        Assert.IsTrue(mixed[2] > 0.30f && mixed[2] < mixed[3]);
+        Assert.IsTrue(mixed[3] > 0.85f && mixed[3] <= 1.0f);
+        Assert.AreEqual(0.0f, mixed[4]);
+    }
+
+    [TestMethod]
+    public void LimitUnder200MbCalculatesHevcArgumentsAndPreservesAudio()
+    {
+        var video10Min = new VideoInfo(@"C:\videos\clip.mp4", TimeSpan.FromMinutes(10), "h264", 1920, 1080, "aac");
+        var req10Min = new CutRequest(video10Min, TimeSpan.Zero, TimeSpan.FromMinutes(10), OutputContainer.Original, limitUnder200Mb: true);
+        Assert.IsTrue(req10Min.LimitUnder200Mb);
+        int kbps10 = req10Min.CalculateTargetVideoKbpsUnder200Mb(out bool copyAudio10);
+        Assert.IsTrue(copyAudio10, "Para fragmentos de 10 minutos el audio debe copiarse 1:1 (-c:a copy).");
+        Assert.IsTrue(kbps10 > 2000 && kbps10 < 3000);
+
+        IReadOnlyList<string> nvencArgs = req10Min.BuildArguments(@"C:\videos\temp.mp4", "hevc_nvenc");
+        CollectionAssert.Contains(nvencArgs.ToList(), "hevc_nvenc");
+        CollectionAssert.Contains(nvencArgs.ToList(), "hvc1");
+        CollectionAssert.Contains(nvencArgs.ToList(), "copy");
+
+        var video100Min = new VideoInfo(@"C:\videos\long.webm", TimeSpan.FromMinutes(100), "vp9", 1920, 1080, "opus");
+        var req100Min = new CutRequest(video100Min, TimeSpan.Zero, TimeSpan.FromMinutes(100), OutputContainer.Original, limitUnder200Mb: true);
+        Assert.AreEqual(@"C:\videos\long_cut.mp4", req100Min.OutputPath);
+        int kbps100 = req100Min.CalculateTargetVideoKbpsUnder200Mb(out bool copyAudio100, out int aacKbps100);
+        Assert.IsFalse(copyAudio100);
+        long estimatedTotalBytes = (long)((kbps100 + aacKbps100) * 1000.0 / 8.0 * 6000.0);
+        Assert.IsTrue(estimatedTotalBytes < CutRequest.HardLimit200MbBytes);
+    }
 }
 

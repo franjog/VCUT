@@ -32,7 +32,7 @@ partial class principal : Form
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(800, 450);
         Name = "principal";
-        Text = "principal";
+        Text = "VCutStudio";
     }
 }
 

@@ -136,22 +136,33 @@ public sealed class VideoService
         var parser = new ProgressParser(request.Duration);
         try
         {
-            ProcessResult result = await MediaProcess.RunAsync(
-                _ffmpeg,
-                request.BuildArguments(temporary),
-                cancellationToken,
-                line =>
-                {
-                    CutProgress update = parser.Parse(line, watch.Elapsed);
-                    if (update is not null)
+            ProcessResult result;
+            if (!request.LimitUnder200Mb)
+            {
+                result = await MediaProcess.RunAsync(
+                    _ffmpeg,
+                    request.BuildArguments(temporary),
+                    cancellationToken,
+                    line =>
                     {
-                        progress?.Report(update);
-                    }
-                }).ConfigureAwait(false);
+                        CutProgress update = parser.Parse(line, watch.Elapsed);
+                        if (update is not null)
+                        {
+                            progress?.Report(update);
+                        }
+                    }).ConfigureAwait(false);
+            }
+            else
+            {
+                result = await RunHighEfficiencyUnder200MbAsync(request, temporary, watch, parser, progress, cancellationToken).ConfigureAwait(false);
+            }
 
             if (result.ExitCode != 0)
             {
-                throw new IOException("FFmpeg no pudo guardar el recorte sin recodificar. El contenedor debe admitir todas las pistas del archivo." + Environment.NewLine + result.Errors);
+                string errorTitle = request.LimitUnder200Mb
+                    ? "FFmpeg no pudo exportar el vídeo reducido a menos de 200 MB."
+                    : "FFmpeg no pudo guardar el recorte sin recodificar. El contenedor debe admitir todas las pistas del archivo.";
+                throw new IOException(errorTitle + Environment.NewLine + result.Errors);
             }
 
             if (!File.Exists(temporary) || new FileInfo(temporary).Length == 0)
@@ -175,6 +186,119 @@ public sealed class VideoService
         }
     }
 
+    private async Task<ProcessResult> RunHighEfficiencyUnder200MbAsync(
+        CutRequest request,
+        string temporary,
+        Stopwatch watch,
+        ProgressParser parser,
+        IProgress<CutProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        Action<string> onLine = line =>
+        {
+            CutProgress update = parser.Parse(line, watch.Elapsed);
+            if (update is not null)
+            {
+                progress?.Report(update);
+            }
+        };
+
+        string hwEncoder = SelectHardwareHevcEncoder(request.Video);
+        if (!string.IsNullOrEmpty(hwEncoder))
+        {
+            if (string.Equals(hwEncoder, "hevc_nvenc", StringComparison.OrdinalIgnoreCase))
+            {
+                ProcessResult cudaRes = await MediaProcess.RunAsync(
+                    _ffmpeg,
+                    request.BuildArguments(temporary, hwEncoder, forceHighQualityAacAudio: false, useGpuHardwareDecode: true),
+                    cancellationToken,
+                    onLine).ConfigureAwait(false);
+
+                if (cudaRes.ExitCode == 0 && File.Exists(temporary) && new FileInfo(temporary).Length > 0)
+                {
+                    return cudaRes;
+                }
+
+                DeleteTemporaryIfPresent(temporary);
+            }
+
+            ProcessResult hwRes = await MediaProcess.RunAsync(
+                _ffmpeg,
+                request.BuildArguments(temporary, hwEncoder, forceHighQualityAacAudio: false, useGpuHardwareDecode: false),
+                cancellationToken,
+                onLine).ConfigureAwait(false);
+
+            if (hwRes.ExitCode == 0 && File.Exists(temporary) && new FileInfo(temporary).Length > 0)
+            {
+                return hwRes;
+            }
+
+            DeleteTemporaryIfPresent(temporary);
+        }
+
+        ProcessResult cpuRes = await MediaProcess.RunAsync(
+            _ffmpeg,
+            request.BuildArguments(temporary, "libx265", forceHighQualityAacAudio: false),
+            cancellationToken,
+            onLine).ConfigureAwait(false);
+
+        if (cpuRes.ExitCode == 0 && File.Exists(temporary) && new FileInfo(temporary).Length > 0)
+        {
+            return cpuRes;
+        }
+
+        DeleteTemporaryIfPresent(temporary);
+
+        return await MediaProcess.RunAsync(
+            _ffmpeg,
+            request.BuildArguments(temporary, "libx265", forceHighQualityAacAudio: true),
+            cancellationToken,
+            onLine).ConfigureAwait(false);
+    }
+
+    private static string SelectHardwareHevcEncoder(VideoInfo video)
+    {
+        if (video is null || (video.Width > 0 && video.Width < 160) || (video.Height > 0 && video.Height < 128))
+        {
+            return null;
+        }
+
+        try
+        {
+            IReadOnlyList<GpuInfo> gpus = GpuDetector.Detect();
+            if (gpus.Count == 0)
+            {
+                return null;
+            }
+
+            return gpus[0].PreferredAccelerator switch
+            {
+                "cuda" => "hevc_nvenc",
+                "amf" => "hevc_amf",
+                "qsv" => "hevc_qsv",
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void DeleteTemporaryIfPresent(string temporary)
+    {
+        try
+        {
+            if (File.Exists(temporary))
+            {
+                File.Delete(temporary);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private void CheckTools()
     {
         if (!File.Exists(_ffmpeg) || !File.Exists(_ffprobe))
@@ -183,4 +307,3 @@ public sealed class VideoService
         }
     }
 }
-
